@@ -43,17 +43,37 @@ def load_ui(label: str, side_key: str):
     )
     st.session_state[f'{side_key}_type'] = typ
 
+    
     if typ == 'CSV':
+        col1, col2 = st.columns([1,1])
+        with col1:
+            delim_label = f"{label}: Délimiteur CSV"
+            # Propose les séparateurs courants : virgule, point-virgule, tabulation, |, :
+            delim = st.selectbox(
+                delim_label,
+                options=[',',';','\\t','|',':'],
+                index=0,
+                key=f'{side_key}_csv_delim'
+            )
+            if delim == '\\t':
+                st.caption('Délimiteur actuel: TAB')
+        with col2:
+            st.caption("Format attendu: encodage UTF-8 par défaut.")
+
         up = st.file_uploader(f"{label}: Charger un CSV", type=['csv'], key=f'{side_key}_csv')
         if up is not None:
             try:
-                df = pd.read_csv(up, dtype='string')
-                # smart trim/format will happen later if needed
+                # Normalise la valeur de l’UI : si '\\t', on passe bien '\t' à pandas
+                sep = '\t' if st.session_state.get(f'{side_key}_csv_delim') in ('\\t', '\t') \
+                        else st.session_state.get(f'{side_key}_csv_delim', ',')
+
+                df = pd.read_csv(up, dtype='string', sep=sep)
+                # Trim de sécurité
                 for c in df.columns:
                     if pd.api.types.is_string_dtype(df[c]):
                         df[c] = df[c].str.strip()
                 st.session_state[f'{side_key}_df'] = df
-                st.success(f"{label}: {len(df)} lignes chargées (CSV)")
+                st.success(f"{label}: {len(df)} lignes chargées (CSV, sep='{sep if sep!='\\t' else 'TAB'}')")
                 st.dataframe(df.head(20))
             except Exception as e:
                 st.error(f"{label}: erreur de lecture CSV – {e}")
@@ -62,6 +82,7 @@ def load_ui(label: str, side_key: str):
             if isinstance(df_prev, pd.DataFrame):
                 st.info(f"{label}: {len(df_prev)} lignes en mémoire (CSV)")
                 st.dataframe(df_prev.head(20))
+
 
     elif typ == 'SQL (SQLAlchemy/ODBC)':
         conn = st.text_input(f"{label}: Chaîne de connexion SQLAlchemy", value=st.session_state.get(f'{side_key}_conn') or '')
